@@ -1,0 +1,517 @@
+{
+  "name": "AI Lead Qualifier v2 (met F# microservice)",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "lead-qualifier",
+        "responseMode": "responseNode",
+        "options": {}
+      },
+      "id": "node-001",
+      "name": "Webhook — Lead binnenkomt",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 2,
+      "position": [240, 300]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "f1",
+              "name": "name",
+              "value": "={{ $json.body.name ?? $json.body.data?.name ?? 'Onbekend' }}",
+              "type": "string"
+            },
+            {
+              "id": "f2",
+              "name": "email",
+              "value": "={{ $json.body.email ?? $json.body.data?.email ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f3",
+              "name": "company",
+              "value": "={{ $json.body.company ?? $json.body.data?.company ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f4",
+              "name": "budget",
+              "value": "={{ $json.body.budget ?? $json.body.data?.budget ?? 0 }}",
+              "type": "number"
+            },
+            {
+              "id": "f5",
+              "name": "message",
+              "value": "={{ $json.body.message ?? $json.body.data?.message ?? '' }}",
+              "type": "string"
+            },
+            {
+              "id": "f6",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-002",
+      "name": "Data normaliseren",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [460, 300]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.openai.com/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"model\": \"gpt-4o-mini\",\n  \"max_tokens\": 300,\n  \"temperature\": 0,\n  \"response_format\": { \"type\": \"json_object\" },\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Je bent een lead-kwalificatie assistent. Geef ALLEEN een JSON-object terug met deze velden:\\n{\\n  \\\"score\\\": \\\"Hot\\\" | \\\"Warm\\\" | \\\"Cold\\\",\\n  \\\"category\\\": \\\"één woord\\\",\\n  \\\"urgency\\\": \\\"Hoog\\\" | \\\"Gemiddeld\\\" | \\\"Laag\\\",\\n  \\\"reasoning\\\": \\\"max 2 zinnen in het Nederlands\\\",\\n  \\\"suggested_subject\\\": \\\"onderwerpregel voor follow-up e-mail\\\"\\n}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"Naam: {{ $('Data normaliseren').item.json.name }}\\nBedrijf: {{ $('Data normaliseren').item.json.company }}\\nE-mail: {{ $('Data normaliseren').item.json.email }}\\nBudget: {{ $('Data normaliseren').item.json.budget }}\\nBericht: {{ $('Data normaliseren').item.json.message }}\"\n    }\n  ]\n}",
+        "options": {
+          "timeout": 30000
+        }
+      },
+      "id": "node-003",
+      "name": "OpenAI — Lead classificeren",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [680, 300],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "VERVANG_MET_JOUW_CREDENTIAL_ID",
+          "name": "OpenAI API Key"
+        }
+      },
+      "notes": "Body Type = JSON, Specify Body = Using JSON. Authentication = Header Auth met jouw OpenAI credential."
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://VERVANG_MET_JOUW_SERVICE_URL/score",
+        "sendBody": true,
+        "contentType": "json",
+        "body": "={\n  \"name\":    \"{{ $('Data normaliseren').item.json.name }}\",\n  \"email\":   \"{{ $('Data normaliseren').item.json.email }}\",\n  \"company\": \"{{ $('Data normaliseren').item.json.company }}\",\n  \"budget\":  {{ $('Data normaliseren').item.json.budget }},\n  \"message\": \"{{ $('Data normaliseren').item.json.message }}\"\n}",
+        "options": {
+          "timeout": 10000
+        }
+      },
+      "id": "node-004",
+      "name": "F# Service — Type-safe validatie",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [900, 300],
+      "notes": "Roept jouw Haskell/F# microservice aan. Vervang de URL met jouw Railway of Fly.io deployment URL. Als valid=false stuurt de IF node erna de flow naar een error branch."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "valid-check",
+              "leftValue": "={{ $json.valid }}",
+              "rightValue": true,
+              "operator": {
+                "type": "boolean",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-005",
+      "name": "F# validatie geslaagd?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1100, 300],
+      "notes": "True = data is geldig, ga door. False = ongeldige data (bv. geen e-mail), log de fout en stop."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "p1",
+              "name": "ai_score",
+              "value": "={{ JSON.parse($('OpenAI — Lead classificeren').item.json.choices[0].message.content).score }}",
+              "type": "string"
+            },
+            {
+              "id": "p2",
+              "name": "ai_category",
+              "value": "={{ JSON.parse($('OpenAI — Lead classificeren').item.json.choices[0].message.content).category }}",
+              "type": "string"
+            },
+            {
+              "id": "p3",
+              "name": "ai_urgency",
+              "value": "={{ JSON.parse($('OpenAI — Lead classificeren').item.json.choices[0].message.content).urgency }}",
+              "type": "string"
+            },
+            {
+              "id": "p4",
+              "name": "ai_reasoning",
+              "value": "={{ JSON.parse($('OpenAI — Lead classificeren').item.json.choices[0].message.content).reasoning }}",
+              "type": "string"
+            },
+            {
+              "id": "p5",
+              "name": "ai_suggested_subject",
+              "value": "={{ JSON.parse($('OpenAI — Lead classificeren').item.json.choices[0].message.content).suggested_subject }}",
+              "type": "string"
+            },
+            {
+              "id": "p6",
+              "name": "fp_score",
+              "value": "={{ $('F# Service — Type-safe validatie').item.json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "p7",
+              "name": "fp_reasoning",
+              "value": "={{ $('F# Service — Type-safe validatie').item.json.reasoning }}",
+              "type": "string"
+            },
+            {
+              "id": "p8",
+              "name": "fp_confidence",
+              "value": "={{ $('F# Service — Type-safe validatie').item.json.confidence }}",
+              "type": "number"
+            },
+            {
+              "id": "p9",
+              "name": "final_score",
+              "value": "={{ $('F# Service — Type-safe validatie').item.json.score }}",
+              "type": "string"
+            },
+            {
+              "id": "p10",
+              "name": "name",
+              "value": "={{ $('Data normaliseren').item.json.name }}",
+              "type": "string"
+            },
+            {
+              "id": "p11",
+              "name": "email",
+              "value": "={{ $('Data normaliseren').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "p12",
+              "name": "company",
+              "value": "={{ $('Data normaliseren').item.json.company }}",
+              "type": "string"
+            },
+            {
+              "id": "p13",
+              "name": "budget",
+              "value": "={{ $('Data normaliseren').item.json.budget }}",
+              "type": "number"
+            },
+            {
+              "id": "p14",
+              "name": "message",
+              "value": "={{ $('Data normaliseren').item.json.message }}",
+              "type": "string"
+            },
+            {
+              "id": "p15",
+              "name": "timestamp",
+              "value": "={{ $('Data normaliseren').item.json.timestamp }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-006",
+      "name": "Resultaten samenvoegen",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1300, 200],
+      "notes": "Combineert OpenAI intentie + F# type-safe score. final_score gebruikt de F# score als bron van waarheid voor routering."
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "e1",
+              "name": "error_type",
+              "value": "Ongeldige lead data",
+              "type": "string"
+            },
+            {
+              "id": "e2",
+              "name": "error_details",
+              "value": "={{ $json.errors?.join(', ') ?? 'Onbekende validatiefout' }}",
+              "type": "string"
+            },
+            {
+              "id": "e3",
+              "name": "original_email",
+              "value": "={{ $('Data normaliseren').item.json.email }}",
+              "type": "string"
+            },
+            {
+              "id": "e4",
+              "name": "timestamp",
+              "value": "={{ new Date().toISOString() }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-007",
+      "name": "Validatiefout loggen",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.4,
+      "position": [1300, 420],
+      "notes": "Vangt ongeldige leads op — bv. geen e-mailadres of negatief budget. Log dit apart zodat je weet welke leads nooit verwerkt zijn."
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "hot-check",
+              "leftValue": "={{ $json.final_score }}",
+              "rightValue": "Hot",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-008",
+      "name": "Is Hot lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1520, 200]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": false,
+            "typeValidation": "strict"
+          },
+          "conditions": [
+            {
+              "id": "warm-check",
+              "leftValue": "={{ $json.final_score }}",
+              "rightValue": "Warm",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "id": "node-009",
+      "name": "Is Warm lead?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [1520, 380]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "VERVANG_MET_JOUW_SHEET_ID",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "Leads",
+          "mode": "name"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Tijdstip":        "={{ $json.timestamp }}",
+            "Naam":            "={{ $json.name }}",
+            "Bedrijf":         "={{ $json.company }}",
+            "E-mail":          "={{ $json.email }}",
+            "Budget":          "={{ $json.budget }}",
+            "Bericht":         "={{ $json.message }}",
+            "Score":           "={{ $json.final_score }}",
+            "AI Score":        "={{ $json.ai_score }}",
+            "FP Score":        "={{ $json.fp_score }}",
+            "FP Confidence":   "={{ $json.fp_confidence }}",
+            "Categorie":       "={{ $json.ai_category }}",
+            "Urgentie":        "={{ $json.ai_urgency }}",
+            "AI Redenering":   "={{ $json.ai_reasoning }}",
+            "FP Redenering":   "={{ $json.fp_reasoning }}",
+            "Opvolgstatus":    "=Nieuw"
+          }
+        },
+        "options": {}
+      },
+      "id": "node-010",
+      "name": "Google Sheets — Lead loggen",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.5,
+      "position": [1740, 300],
+      "notes": "Logt nu zowel de AI score als de F# score apart — zodat je kan zien waar ze van elkaar afwijken. Voeg ook FP Score en FP Confidence kolommen toe aan je sheet."
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $json.email }}",
+        "subject": "={{ $json.ai_suggested_subject }}",
+        "emailType": "html",
+        "message": "=<p>Hallo {{ $json.name }},</p>\n\n<p>Bedankt voor je bericht! We hebben je aanvraag ontvangen en kijken ernaar uit om je te helpen.</p>\n\n<p>We nemen binnen 24 uur contact met je op om je vraag over <strong>{{ $json.ai_category }}</strong> verder te bespreken.</p>\n\n<p>Met vriendelijke groet,<br>\n[Jouw naam]<br>\n[Jouw bedrijf]</p>",
+        "options": {
+          "replyTo": "jouw@email.com"
+        }
+      },
+      "id": "node-011",
+      "name": "Gmail — Follow-up e-mail",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [1960, 200]
+    },
+    {
+      "parameters": {
+        "select": "channel",
+        "channelId": {
+          "__rl": true,
+          "value": "VERVANG_MET_JOUW_CHANNEL_ID",
+          "mode": "id"
+        },
+        "text": "=🔥 *HOT LEAD!*\n\n*Naam:* {{ $json.name }}\n*Bedrijf:* {{ $json.company }}\n*E-mail:* {{ $json.email }}\n*Budget:* €{{ $json.budget }}\n\n*AI Score:* {{ $json.ai_score }} | *FP Score:* {{ $json.fp_score }} ({{ $json.fp_confidence * 100 }}% confidence)\n*Categorie:* {{ $json.ai_category }} | *Urgentie:* {{ $json.ai_urgency }}\n\n*FP Redenering:* {{ $json.fp_reasoning }}\n\n*Bericht:*\n{{ $json.message }}",
+        "otherOptions": {}
+      },
+      "id": "node-012",
+      "name": "Slack — Hot lead alert",
+      "type": "n8n-nodes-base.slack",
+      "typeVersion": 2.2,
+      "position": [1960, 80]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"ok\", \"message\": \"Lead ontvangen en verwerkt\" }",
+        "options": {}
+      },
+      "id": "node-013",
+      "name": "Webhook Response — OK",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1960, 400]
+    },
+    {
+      "parameters": {
+        "respondWith": "json",
+        "responseBody": "={ \"status\": \"error\", \"message\": \"Ongeldige lead data\" }",
+        "options": {
+          "responseCode": 422
+        }
+      },
+      "id": "node-014",
+      "name": "Webhook Response — Fout",
+      "type": "n8n-nodes-base.respondToWebhook",
+      "typeVersion": 1.1,
+      "position": [1520, 560],
+      "notes": "Stuurt 422 terug naar Tally als de F# validatie mislukt."
+    }
+  ],
+  "connections": {
+    "Webhook — Lead binnenkomt": {
+      "main": [[{ "node": "Data normaliseren", "type": "main", "index": 0 }]]
+    },
+    "Data normaliseren": {
+      "main": [[{ "node": "OpenAI — Lead classificeren", "type": "main", "index": 0 }]]
+    },
+    "OpenAI — Lead classificeren": {
+      "main": [[{ "node": "F# Service — Type-safe validatie", "type": "main", "index": 0 }]]
+    },
+    "F# Service — Type-safe validatie": {
+      "main": [[{ "node": "F# validatie geslaagd?", "type": "main", "index": 0 }]]
+    },
+    "F# validatie geslaagd?": {
+      "main": [
+        [{ "node": "Resultaten samenvoegen", "type": "main", "index": 0 }],
+        [{ "node": "Validatiefout loggen", "type": "main", "index": 0 }]
+      ]
+    },
+    "Resultaten samenvoegen": {
+      "main": [[{ "node": "Is Hot lead?", "type": "main", "index": 0 }]]
+    },
+    "Validatiefout loggen": {
+      "main": [[{ "node": "Webhook Response — Fout", "type": "main", "index": 0 }]]
+    },
+    "Is Hot lead?": {
+      "main": [
+        [
+          { "node": "Slack — Hot lead alert", "type": "main", "index": 0 },
+          { "node": "Google Sheets — Lead loggen", "type": "main", "index": 0 },
+          { "node": "Gmail — Follow-up e-mail", "type": "main", "index": 0 }
+        ],
+        [{ "node": "Is Warm lead?", "type": "main", "index": 0 }]
+      ]
+    },
+    "Is Warm lead?": {
+      "main": [
+        [
+          { "node": "Google Sheets — Lead loggen", "type": "main", "index": 0 },
+          { "node": "Gmail — Follow-up e-mail", "type": "main", "index": 0 }
+        ],
+        [
+          { "node": "Google Sheets — Lead loggen", "type": "main", "index": 0 },
+          { "node": "Webhook Response — OK", "type": "main", "index": 0 }
+        ]
+      ]
+    },
+    "Gmail — Follow-up e-mail": {
+      "main": [[{ "node": "Webhook Response — OK", "type": "main", "index": 0 }]]
+    },
+    "Slack — Hot lead alert": {
+      "main": [[{ "node": "Webhook Response — OK", "type": "main", "index": 0 }]]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1",
+    "saveManualExecutions": true
+  },
+  "tags": ["portfolio", "lead-qualifier", "ai-automation", "fp-microservice"],
+  "pinData": {
+    "Webhook — Lead binnenkomt": [
+      {
+        "json": {
+          "body": {
+            "name": "Sara Bakker",
+            "email": "sara@grootbedrijf.nl",
+            "company": "Groot Bedrijf BV",
+            "budget": 8000,
+            "message": "Urgent — we moeten deze week onze sales automation live hebben voor onze 50-koppige salesafdeling."
+          }
+        }
+      }
+    ]
+  }
+}
