@@ -68,8 +68,6 @@ Dagelijkse Slack-samenvatting (gepland op 08:00)
 ```
 ai-bdr-pipeline/
 ├── README.md
-├── README-NL.md                      # Nederlandse versie
-├── README-DA.md                      # Deense versie
 ├── n8n-flows/
 │   ├── bdr-main-flow.json            # Hoofdpipeline — importeer in n8n
 │   └── bdr-daily-summary.json        # Geplande dagelijkse rapportage
