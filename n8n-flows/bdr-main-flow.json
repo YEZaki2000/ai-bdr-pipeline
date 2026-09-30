@@ -263,7 +263,7 @@
             "LinkedIn": "={{ $('Google Sheets Trigger').item.json.LinkedIn }}"
           },
           "matchingColumns": [
-            "Bedrijf"
+            "E-mail"
           ],
           "schema": [
             {
@@ -652,7 +652,7 @@
     "binaryMode": "separate",
     "availableInMCP": false
   },
-  "versionId": "8a684a24-42e8-47d6-ac0c-d8a417740e7b",
+  "versionId": "0948f5f5-3944-43de-bb48-140368eeb450",
   "meta": {
     "templateCredsSetupCompleted": true,
     "instanceId": "357ab96b55d5870a77eade63011483c77289c6048958afc12355c57756794fa4"
