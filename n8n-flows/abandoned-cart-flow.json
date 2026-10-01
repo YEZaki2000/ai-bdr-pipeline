@@ -1,0 +1,382 @@
+{
+  "name": "Abandoned Carts",
+  "nodes": [
+    {
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "documentId": {
+          "__rl": true,
+          "value": "1h-Akqm6TXYNIdijQAgMWYZMd3ZWYEmJ_yeAi3kpbt5o",
+          "mode": "list",
+          "cachedResultName": "Abandoned Carts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h-Akqm6TXYNIdijQAgMWYZMd3ZWYEmJ_yeAi3kpbt5o/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Carts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h-Akqm6TXYNIdijQAgMWYZMd3ZWYEmJ_yeAi3kpbt5o/edit#gid=0"
+        },
+        "event": "rowAdded",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheetsTrigger",
+      "typeVersion": 1,
+      "position": [
+        32,
+        -128
+      ],
+      "id": "089f19d0-3198-4371-9a98-26017fb82d29",
+      "name": "Google Sheets Trigger",
+      "credentials": {
+        "googleSheetsTriggerOAuth2Api": {
+          "id": "ltncBtvx2bVgaZJX",
+          "name": "Google Sheets Trigger account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "amount": 1,
+        "unit": "hours"
+      },
+      "type": "n8n-nodes-base.wait",
+      "typeVersion": 1.1,
+      "position": [
+        224,
+        -128
+      ],
+      "id": "f66eafb3-3be4-4cfd-a008-ba99a5c528e2",
+      "name": "Wait",
+      "webhookId": "869305c4-5950-4bdb-9efd-b036861687eb"
+    },
+    {
+      "parameters": {
+        "sendTo": "={{ $('Google Sheets Trigger').item.json[\"E-mail\"] }}",
+        "subject": "={{ $json.ai_email_subject }}",
+        "message": "={{ $json.email_opening }}\n\n{{ $json.ai_email_body }}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.2,
+      "position": [
+        1088,
+        -128
+      ],
+      "id": "06cbf382-3dae-448a-a796-6258fe5d8fb4",
+      "name": "Send a message",
+      "webhookId": "875d8130-2da9-4013-aac1-15daa930e319",
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "lJebcIhBRYxa9yES",
+          "name": "Gmail account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "options": {
+            "caseSensitive": true,
+            "leftValue": "",
+            "typeValidation": "strict",
+            "version": 3
+          },
+          "conditions": [
+            {
+              "id": "b33ad384-3c86-455b-9b6a-7458635bdbc0",
+              "leftValue": "={{ $json.Status }}",
+              "rightValue": "Abandoned",
+              "operator": {
+                "type": "string",
+                "operation": "equals"
+              }
+            }
+          ],
+          "combinator": "and"
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2.3,
+      "position": [
+        432,
+        -128
+      ],
+      "id": "e61a2081-089a-48a5-8c91-93bf8e984906",
+      "name": "If Abandoned"
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://api.groq.com/openai/v1/chat/completions",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"model\": \"openai/gpt-oss-120b\",\n  \"max_tokens\": 2000,\n  \"temperature\": 0,\n  \"messages\": [\n    {\n      \"role\": \"system\",\n      \"content\": \"Je bent een herinnering-email schrijver voor abandoned carts. Geef ALLEEN een geldig JSON-object terug, geen uitleg, geen markdown, geen backticks. Alleen dit formaat: {\\\"status\\\": \\\"Verstuurd\\\", \\\"email_subject\\\": \\\"onderwerpregel\\\", \\\"email_opening\\\": \\\"opening zin\\\", \\\"email_body\\\": \\\"max 2 zinnen\\\", \\\"email_cta\\\": \\\"call to action\\\"}\"\n    },\n    {\n      \"role\": \"user\",\n      \"content\": \"=Naam: {{ $('Google Sheets Trigger').item.json['Naam'] }}\\nProduct: {{ $('Google Sheets Trigger').item.json['Product'] }}\\nPrijs: {{ $('Google Sheets Trigger').item.json['Prijs'] }}\"\n    }\n  ]\n}",
+        "options": {}
+      },
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.5,
+      "position": [
+        672,
+        -128
+      ],
+      "id": "69d9ffa5-432e-45e2-897f-ab2403013506",
+      "name": "Groq POST",
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "AQOiXbBCfc0qy1CG",
+          "name": "Header Auth account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "id": "7234e92f-4d66-45db-88cb-4b476129529a",
+              "name": "=status",
+              "value": "={{ JSON.parse($json.choices[0].message.content).status }}",
+              "type": "string"
+            },
+            {
+              "id": "98e4744b-fc92-48e7-bc77-f258b8583d2a",
+              "name": "email_opening",
+              "value": "={{ JSON.parse($json.choices[0].message.content).email_opening }}",
+              "type": "string"
+            },
+            {
+              "id": "42ed802d-835f-4ab2-8945-a7364ab17a84",
+              "name": "ai_email_subject",
+              "value": "={{ JSON.parse($json.choices[0].message.content).email_subject }}",
+              "type": "string"
+            },
+            {
+              "id": "1bfced02-cdb2-4e33-8bcc-b26f599d81e3",
+              "name": "ai_email_body",
+              "value": "={{ JSON.parse($json.choices[0].message.content).email_body }}",
+              "type": "string"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        880,
+        -128
+      ],
+      "id": "61d3c2d6-5d70-4531-b1bb-eee4eb03bc5e",
+      "name": "Groq JSON"
+    },
+    {
+      "parameters": {
+        "operation": "update",
+        "documentId": {
+          "__rl": true,
+          "value": "1h-Akqm6TXYNIdijQAgMWYZMd3ZWYEmJ_yeAi3kpbt5o",
+          "mode": "list",
+          "cachedResultName": "Abandoned Carts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h-Akqm6TXYNIdijQAgMWYZMd3ZWYEmJ_yeAi3kpbt5o/edit?usp=drivesdk"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "gid=0",
+          "mode": "list",
+          "cachedResultName": "Carts",
+          "cachedResultUrl": "https://docs.google.com/spreadsheets/d/1h-Akqm6TXYNIdijQAgMWYZMd3ZWYEmJ_yeAi3kpbt5o/edit#gid=0"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Product": "={{ $('Google Sheets Trigger').item.json.Product }}",
+            "Herrinering verstuurd": "={{ $('Groq JSON').item.json.status }}",
+            "E-mail": "={{ $('Google Sheets Trigger').item.json[\"E-mail\"] }}"
+          },
+          "matchingColumns": [
+            "E-mail"
+          ],
+          "schema": [
+            {
+              "id": "Naam",
+              "displayName": "Naam",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "E-mail",
+              "displayName": "E-mail",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Product",
+              "displayName": "Product",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Prijs",
+              "displayName": "Prijs",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Status",
+              "displayName": "Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "Herrinering verstuurd",
+              "displayName": "Herrinering verstuurd",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true
+            },
+            {
+              "id": "row_number",
+              "displayName": "row_number",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "number",
+              "canBeUsedToMatch": true,
+              "readOnly": true,
+              "removed": true
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": false
+        },
+        "options": {}
+      },
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1312,
+        -128
+      ],
+      "id": "ee6a5bdb-1c7e-4ecf-a971-df54d84c4b4b",
+      "name": "Update row in sheet",
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "7Zszbx1PA8OwhTgj",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "pinData": {},
+  "connections": {
+    "Google Sheets Trigger": {
+      "main": [
+        [
+          {
+            "node": "Wait",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Wait": {
+      "main": [
+        [
+          {
+            "node": "If Abandoned",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "If Abandoned": {
+      "main": [
+        [
+          {
+            "node": "Groq POST",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq POST": {
+      "main": [
+        [
+          {
+            "node": "Groq JSON",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Groq JSON": {
+      "main": [
+        [
+          {
+            "node": "Send a message",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send a message": {
+      "main": [
+        [
+          {
+            "node": "Update row in sheet",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": true,
+  "settings": {
+    "executionOrder": "v1",
+    "binaryMode": "separate"
+  },
+  "versionId": "dac482d6-c259-46e7-8ccd-e5935d1adce4",
+  "meta": {
+    "templateCredsSetupCompleted": true,
+    "instanceId": "357ab96b55d5870a77eade63011483c77289c6048958afc12355c57756794fa4"
+  },
+  "nodeGroups": [],
+  "id": "0eK6tF6LwXioAfoM",
+  "tags": []
+}
